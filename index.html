@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Fazendinha Coop - 2D Pixel Art</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <h1 id="levelTitle">Fase 1: Entrada da Fazenda</h1>
+    <canvas id="gameCanvas" width="640" height="480"></canvas>
+    
+    <div class="instructions">
+        <p><strong>Menina (Chapéu):</strong> Setas Direcionais | Coleta: Chapéus 🎩</p>
+        <p><strong>Galinha (Ovo):</strong> W, A, S, D | Coleta: Ovos 🥚</p>
+        <p class="warning-text">Lama Marrom: Segura | Lodo (Verde-Limão) e Rio: Mortais!</p>
+    </div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+const TILE_SIZE = 32;
+const KEYS = {};
+
+window.addEventListener('keydown', e => KEYS[e.code] = true);
+window.addEventListener('keyup', e => KEYS[e.code] = false);
+
+let currentLevel = 0;
+
+// Terrenos: 0: Grama, 1: Lama, 2: Lodo, 3: Rio, 5: Parede/Estrutura
+// Objetos: M: Início Menina, G: Início Galinha, C: Chapéu, O: Ovo, B: Botão, P: Portão, E: Saída Casa, S: Saída Celeiro
+const LEVELS = [
+    {
+        name: "Fase 1: Entrada da Fazenda",
+        season: "summer",
+        map: [
+            [5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5],
+            [5, 5, 5, 5, 5, 0, 0, 0, 0, 0, 0, 0, 0, 5, 5, 5, 5, 5, 5, 5],
+            [5, 'E', 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 5, 'S', 0, 0, 0, 5, 5],
+            [5, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 5],
+            [5, 0, 'C', 0, 5, 0, 0, 0, 0, 0, 'P', 0, 0, 5, 0, 0, 0, 0, 0, 5],
+            [5, 0, 0, 0, 5, 0, 0, 1, 1, 0, 5, 5, 5, 5, 0, 0, 0, 0, 0, 5],
+            [5, 'M', 0, 0, 0, 0, 0, 1, 1, 0, 5, 2, 2, 2, 2, 5, 0, 0, 0, 5],
+            [5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 2, 'O', 2, 2, 5, 0, 0, 0, 5],
+            [5, 0, 'B', 0, 0, 0, 0, 1, 1, 0, 5, 2, 2, 2, 2, 5, 0, 0, 0, 5],
+            [5, 0, 0, 0, 0, 0, 0, 1, 1, 0, 5, 5, 5, 5, 5, 5, 0, 0, 0, 5],
+            [5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 'G', 0, 5],
+            [5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 3, 3, 5],
+            [5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 3, 3, 3, 5],
+            [5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 3, 3, 3, 5],
+            [5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5]
+        ]
+    }
+];
+
+class Player {
+    constructor(type, controls) {
+        this.x = 0;
+        this.y = 0;
+        this.width = 24;
+        this.height = 24;
+        this.speed = 2.5;
+        this.type = type;
+        this.controls = controls;
+        this.escaped = false;
+    }
+
+    reset(x, y) {
+        this.x = x;
+        this.y = y;
+        this.escaped = false;
+    }
+
+    update(mapLayout) {
+        if (this.escaped) return;
+
+        let dx = 0;
+        let dy = 0;
+
+        if (KEYS[this.controls.up]) dy -= 1;
+        if (KEYS[this.controls.down]) dy += 1;
+        if (KEYS[this.controls.left]) dx -= 1;
+        if (KEYS[this.controls.right]) dx += 1;
+
+        if (dx !== 0 && dy !== 0) {
+            dx *= 0.7071;
+            dy *= 0.7071;
+        }
+
+        let nextX = this.x + dx * this.speed;
+        let nextY = this.y + dy * this.speed;
+
+        if (!isSolid(nextX, this.y, this.width, this.height, mapLayout)) this.x = nextX;
+        if (!isSolid(this.x, nextY, this.width, this.height, mapLayout)) this.y = nextY;
+    }
+
+    draw(ctx) {
+        if (this.escaped) return;
+
+        ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
+        ctx.beginPath();
+        ctx.ellipse(this.x + 12, this.y + 22, 8, 3, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (this.type === 'menina') {
+            ctx.fillStyle = "#E75480";
+            ctx.fillRect(this.x + 4, this.y + 8, 16, 12);
+            ctx.fillStyle = "#FFD1B3";
+            ctx.beginPath();
+            ctx.arc(this.x + 12, this.y + 6, 6, 0, Math.PI * 2);
+            ctx.fill();
+        } else {
+            ctx.fillStyle = "#FFFFFF";
+            ctx.beginPath();
+            ctx.arc(this.x + 12, this.y + 12, 8, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = "#FF8C00";
+            ctx.fillRect(this.x + 18, this.y + 10, 4, 4);
+        }
+    }
+}
+
+const menina = new Player('menina', { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight' });
+const galinha = new Player('galinha', { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD' });
+
+let items = [];
+let exits = [];
+let buttons = [];
+let gates = [];
+let currentMap = [];
+
+function loadLevel(levelIndex) {
+    const level = LEVELS[levelIndex];
+    document.getElementById('levelTitle').innerText = level.name;
+    currentMap = level.map.map(row => [...row]);
+
+    items = [];
+    exits = [];
+    buttons = [];
+    gates = [];
+
+    for (let r = 0; r < currentMap.length; r++) {
+        for (let c = 0; c < currentMap[r].length; c++) {
+            let tile = currentMap[r][c];
+            let x = c * TILE_SIZE;
+            let y = r * TILE_SIZE;
+
+            if (tile === 'C') items.push({ x: x + 8, y: y + 8, type: 'chapeu', collected: false });
+            if (tile === 'O') items.push({ x: x + 8, y: y + 8, type: 'ovo', collected: false });
+            if (tile === 'M') menina.reset(x + 4, y + 4);
+            if (tile === 'G') galinha.reset(x + 4, y + 4);
+            if (tile === 'E') exits.push({ x, y, type: 'menina' });
+            if (tile === 'S') exits.push({ x, y, type: 'galinha' });
+            if (tile === 'B') buttons.push({ x, y, pressed: false });
+            if (tile === 'P') gates.push({ r, c });
+        }
+    }
+}
+
+function isSolid(x, y, w, h, map) {
+    let points = [
+        { x: x, y: y },
+        { x: x + w, y: y },
+        { x: x, y: y + h },
+        { x: x + w, y: y + h }
+    ];
+
+    return points.some(p => {
+        let c = Math.floor(p.x / TILE_SIZE);
+        let r = Math.floor(p.y / TILE_SIZE);
+        if (r < 0 || r >= map.length || c < 0 || c >= map[0].length) return true;
+        let tile = map[r][c];
+        return tile === 5 || tile === 'P';
+    });
+}
+
+function checkInteractions() {
+    const players = [menina, galinha];
+
+    let buttonPressed = false;
+    buttons.forEach(b => {
+        b.pressed = false;
+        players.forEach(p => {
+            let playerCenterX = p.x + p.width / 2;
+            let playerCenterY = p.y + p.height / 2;
+
+            if (playerCenterX >= b.x && playerCenterX <= b.x + TILE_SIZE &&
+                playerCenterY >= b.y && playerCenterY <= b.y + TILE_SIZE) {
+                buttonPressed = true;
+                b.pressed = true;
+            }
+        });
+    });
+
+    gates.forEach(g => {
+        if (buttonPressed) {
+            currentMap[g.r][g.c] = 0;
+        } else {
+            currentMap[g.r][g.c] = 'P';
+        }
+    });
+
+    players.forEach(p => {
+        let footX = Math.floor((p.x + p.width / 2) / TILE_SIZE);
+        let footY = Math.floor((p.y + p.height) / TILE_SIZE);
+
+        if (footY >= 0 && footY < currentMap.length && footX >= 0 && footX < currentMap[0].length) {
+            let tile = currentMap[footY][footX];
+            if (tile === 2 || tile === 3) {
+                loadLevel(currentLevel);
+            }
+        }
+
+        items.forEach(item => {
+            if (!item.collected) {
+                if (p.x < item.x + 16 && p.x + p.width > item.x &&
+                    p.y < item.y + 16 && p.y + p.height > item.y) {
+                    if (p.type === 'menina' && item.type === 'chapeu') item.collected = true;
+                    if (p.type === 'galinha' && item.type === 'ovo') item.collected = true;
+                }
+            }
+        });
+
+        exits.forEach(exit => {
+            if (p.type === exit.type) {
+                if (p.x < exit.x + TILE_SIZE && p.x + p.width > exit.x &&
+                    p.y < exit.y + TILE_SIZE && p.y + p.height > exit.y) {
+                    p.escaped = true;
+                }
+            }
+        });
+    });
+
+    if (menina.escaped && galinha.escaped) {
+        alert("Fase Concluída!");
+        currentLevel = 0;
+        loadLevel(currentLevel);
+    }
+}
+
+function drawMap() {
+    for (let r = 0; r < currentMap.length; r++) {
+        for (let c = 0; c < currentMap[r].length; c++) {
+            let tile = currentMap[r][c];
+            let x = c * TILE_SIZE;
+            let y = r * TILE_SIZE;
+
+            ctx.fillStyle = "#7C2";
+            ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+
+            if (tile === 1) { ctx.fillStyle = "#654321"; ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE); }
+            if (tile === 2) { ctx.fillStyle = "#32CD32"; ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE); }
+            if (tile === 3) { ctx.fillStyle = "#1E90FF"; ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE); }
+            if (tile === 5) { ctx.fillStyle = "#4A2E10"; ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE); }
+            if (tile === 'P') { ctx.fillStyle = "#8B0000"; ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE); }
+        }
+    }
+
+    buttons.forEach(b => {
+        ctx.fillStyle = b.pressed ? "#FFA500" : "#FFD700";
+        ctx.fillRect(b.x + 8, b.y + 8, 16, 16);
+    });
+
+    exits.forEach(e => {
+        ctx.fillStyle = e.type === 'menina' ? '#E75480' : '#8B5A2B';
+        ctx.fillRect(e.x, e.y, TILE_SIZE, TILE_SIZE);
+    });
+
+    items.forEach(i => {
+        if (!i.collected) {
+            ctx.fillStyle = i.type === 'chapeu' ? '#FFD700' : '#FFFFFF';
+            ctx.beginPath();
+            ctx.arc(i.x + 8, i.y + 8, 6, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    });
+}
+
+function gameLoop() {
+    menina.update(currentMap);
+    galinha.update(currentMap);
+    checkInteractions();
+
+    drawMap();
+
+    if (!menina.escaped) menina.draw(ctx);
+    if (!galinha.escaped) galinha.draw(ctx);
+
+    requestAnimationFrame(gameLoop);
+}
+
+loadLevel(currentLevel);
+gameLoop();
+</script>
+</body>
+</html>
